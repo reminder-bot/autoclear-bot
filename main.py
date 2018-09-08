@@ -35,18 +35,14 @@ class BotClient(discord.AutoShardedClient):
     def __init__(self, *args, **kwargs):
         super(BotClient, self).__init__(*args, **kwargs)
 
-        self.times = {
-            'last_loop' : time.time(),
-            'start' : 0,
-            'loops' : 0
-        }
-
         self.commands = {
             'help' : self.help,
             'info' : self.info,
 
-            'autoclear' : self.autoclear,
+            'start' : self.autoclear,
             'clear' : self.clear,
+            'stop' : self.stop,
+            'rules' : self.rules,
         }
 
         self.config = configparser.SafeConfigParser()
@@ -145,11 +141,34 @@ class BotClient(discord.AutoShardedClient):
 
 
     async def help(self, message, stripped):
-        await message.channel.send(embed=discord.Embed(description='HELP'))
+        await message.channel.send(embed=discord.Embed(title='HELP', description='''
+
+`autoclear start` - Start autoclearing the current channel. Accepts arguments:
+    * User mentions (users the clear applies to- if no mentions, will do all users)
+    * Duration (time in seconds that messages should remain for- defaults to 10s)
+
+    E.g `autoclear start @JellyWX#2946 5`
+
+`autoclear clear` - Delete message history of specific users. Accepts arguments:
+    * User mention (user to clear history of)
+
+`autoclear rules` - Check the autoclear rules for specified channels. Accepts arguments:
+    * Channel mention (channel to view rules of- defaults to current)
+
+        '''))
 
 
     async def info(self, message, stripped):
-        await message.channel.send(embed=discord.Embed(description='INFO'.format(prefix=server.prefix, user=self.user.name)))
+        await message.channel.send(embed=discord.Embed(title='INFO', description='''
+
+Welcome to autoclear bot!
+
+Help page: `autoclear help`
+Prefixes: @ me or `autoclear`
+
+Invite me to your guild: <insert link>
+
+        '''))
 
 
     async def autoclear(self, message, stripped):
@@ -194,6 +213,34 @@ class BotClient(discord.AutoShardedClient):
                 s.time = seconds
 
         session.commit()
+
+
+    async def rules(self, message, stripped):
+
+        if len(message.channel_mentions) > 0:
+            chan = message.channel_mentions[0]
+        else:
+            chan = message.channel
+
+        rules = session.query(Autoclears).filter(Autoclears.channel == chan.id)
+
+        strings = []
+
+        for r in rules:
+            if r.user is None:
+                strings.insert(0, '**GLOBAL**: {} seconds'.format(r.time))
+            else:
+                strings.append('*{}*: {} seconds'.format(message.guild.get_member(r.user), r.time))
+
+        if strings != []:
+            await message.channel.send(embed=discord.Embed(title='{} rules'.format(chan.name), description='\n'.join(strings)))
+        else:
+            await message.channel.send('No rules set for specified channel')
+
+
+    async def stop(self, message, stripped):
+        pass
+
 
     async def clear(self, message, stripped):
 
