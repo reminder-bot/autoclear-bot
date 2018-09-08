@@ -107,6 +107,7 @@ class BotClient(discord.AutoShardedClient):
         try:
             if await self.get_cmd(message):
                 logger.info('Command: ' + message.content)
+                session.commit()
 
         except discord.errors.Forbidden:
             try:
@@ -144,16 +145,19 @@ class BotClient(discord.AutoShardedClient):
         await message.channel.send(embed=discord.Embed(title='HELP', description='''
 
 `autoclear start` - Start autoclearing the current channel. Accepts arguments:
-    * User mentions (users the clear applies to- if no mentions, will do all users)
-    * Duration (time in seconds that messages should remain for- defaults to 10s)
+\t* User mentions (users the clear applies to- if no mentions, will do all users)
+\t* Duration (time in seconds that messages should remain for- defaults to 10s)
 
-    E.g `autoclear start @JellyWX#2946 5`
+\tE.g `autoclear start @JellyWX#2946 5`
 
 `autoclear clear` - Delete message history of specific users. Accepts arguments:
-    * User mention (user to clear history of)
+\t* User mention (user to clear history of)
 
 `autoclear rules` - Check the autoclear rules for specified channels. Accepts arguments:
-    * Channel mention (channel to view rules of- defaults to current)
+\t* Channel mention (channel to view rules of- defaults to current)
+
+`autoclear stop` - Cancel autoclearing on current channel. Accepts arguments:
+\t* User mentions (users to cancel autoclearing for- if no mentions, will do all users)
 
         '''))
 
@@ -212,8 +216,6 @@ Invite me to your guild: <insert link>
                 print('Editing existing autoclear from {}s to {}s'.format(s.time, seconds))
                 s.time = seconds
 
-        session.commit()
-
 
     async def rules(self, message, stripped):
 
@@ -239,7 +241,30 @@ Invite me to your guild: <insert link>
 
 
     async def stop(self, message, stripped):
-        pass
+
+        if not message.author.guild_permissions.manage_guild:
+            await message.channel.send('You must be a Manager to run this command')
+
+        elif message.mentions != []:
+            for mention in message.mentions:
+                s = session.query(Autoclears).filter_by(channel=message.channel.id, user=mention.id).first()
+
+                if s is None:
+                    await message.channel.send('Couldn\'t find an autoclear for specified user `{}` in the current channel'.format(mention))
+
+                else:
+                    session.query(Autoclears).filter_by(channel=message.channel.id, user=mention.id).delete(synchronize_session='fetch')
+                    await message.channel.send('Cancelled autoclear for specified user `{}`'.format(mention))
+
+        else:
+            s = session.query(Autoclears).filter_by(channel=message.channel.id, user=None).first()
+
+            if s is None:
+                await message.channel.send('Couldn\'t find a global autoclear in the current channel')
+
+            else:
+                session.query(Autoclears).filter_by(channel=message.channel.id, user=None).delete(synchronize_session='fetch')
+                await message.channel.send('Cancelled global autoclear on current channel')
 
 
     async def clear(self, message, stripped):
