@@ -95,10 +95,9 @@ class BotClient(discord.AutoShardedClient):
 
     async def on_message(self, message):
 
-        clears = session.query(Autoclears).filter(Autoclears.channel == message.channel.id).order_by(Autoclears.user)
+        clears = session.query(Autoclears).filter(Autoclears.channel == message.channel.id).order_by(Autoclears.time)
 
         for c in clears:
-            print(c)
             if c.user == message.author.id or c.user is None:
                 d = Deletes(time=time.time() + c.time, channel=message.channel.id, message=message.id)
 
