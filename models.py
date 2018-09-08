@@ -16,6 +16,15 @@ class Deletes(Base):
     time = Column(BigInteger)
 
 
+class Autoclears(Base):
+    __tablename__ = 'autoclears'
+
+    id = Column(Integer, primary_key=True)
+    channel = Column(BigInteger)
+    user = Column(BigInteger)
+    time = Column(Integer)
+
+
 engine = create_engine('sqlite:///app.db')
 Base.metadata.create_all(bind=engine)
 

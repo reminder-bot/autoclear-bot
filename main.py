@@ -1,4 +1,4 @@
-from models import Deletes, session
+from models import Deletes, Autoclears, session
 
 import discord
 import asyncio
@@ -9,6 +9,7 @@ import os
 import configparser
 import json
 import logging
+from datetime import datetime
 
 
 class OneLineExceptionFormatter(logging.Formatter):
@@ -93,91 +94,67 @@ class BotClient(discord.AutoShardedClient):
 
 
     async def on_message(self, message):
-        if message.guild is not None and session.query(Server).filter_by(id=message.guild.id).first() is None:
 
-            server = Server(id=message.guild.id, prefix='$', timezone='UTC', language='EN', blacklist={'data': []}, restrictions={'data': []}, tags={}, autoclears={})
+        clears = session.query(Autoclears).filter(Autoclears.channel == message.channel.id).order_by(Autoclears.user)
 
-            session.add(server)
-            session.commit()
+        for c in clears:
+            if c.user == message.author.id or c.user is None:
+                d = Deletes(time=time.time() + c.time, channel=message.channel.id, message=message.id)
 
-        server = None if message.guild is None else session.query(Server).filter_by(id=message.guild.id).first()
-        if server is not None and message.channel.id in map(int, server.autoclears.keys()):
-            d = Deletes(time=time.time() + server.autoclears[str(message.channel.id)], channel=message.channel.id, message=message.id)
+                session.add(d)
+                session.commit()
 
-            session.add(d)
-            session.commit()
-
-        if message.author.bot or message.content == None:
+        if message.author.bot or message.content is None or message.guild is None:
             return
 
         try:
-            if await self.get_cmd(message, server):
+            if await self.get_cmd(message):
                 logger.info('Command: ' + message.content)
 
         except discord.errors.Forbidden:
             try:
-                await message.channel.send(self.get_strings(server, 'no_perms_general'))
+                await message.channel.send('No permissions to perform actions.')
             except discord.errors.Forbidden:
                 logger.info('Twice Forbidden')
 
 
-    async def get_cmd(self, message, server):
+    async def get_cmd(self, message):
 
-        prefix = '$' if server is None else server.prefix
+        prefix = 'autoclear '
 
-        if message.content.startswith('mbprefix'):
-            await self.change_prefix(message, ' '.join(message.content.split(' ')[1:]), server)
-            return True
+        command = None
 
-        command = ''
-        stripped = ''
+        if message.content == self.user.mention:
+            await self.commands['info'](message, '')
 
         if message.content[0:len(prefix)] == prefix:
-
-            command = (message.content + ' ')[len(prefix):message.content.find(' ')]
-            stripped = (message.content + ' ')[message.content.find(' '):].strip()
-
-        elif self.user.id in map(lambda x: x.id, message.mentions) and len(message.content.split(' ')) > 1:
-
             command = message.content.split(' ')[1]
             stripped = (message.content + ' ').split(' ', 2)[-1].strip()
 
-        else:
-            return False
+        elif self.user.id in map(lambda x: x.id, message.mentions) and len(message.content.split(' ')) > 1:
+            command = message.content.split(' ')[1]
+            stripped = (message.content + ' ').split(' ', 2)[-1].strip()
 
-        if command in self.commands.keys():
-            if server is not None and message.channel.id in server.blacklist['data'] and not message.content.startswith(('{}help'.format(server.prefix), '{}blacklist'.format(server.prefix))):
-                await message.channel.send(embed=discord.Embed(description=self.get_strings(server, 'blacklisted')))
-                return False
-
-            command_form = self.commands[command]
-
-            if command_form[1] or server is not None:
-                if not message.guild.me.guild_permissions.manage_webhooks:
-                    await message.channel.send(self.get_strings(server, 'no_perms_webhook'))
-
-                await command_form[0](message, stripped, server)
+        if command is not None:
+            if command in self.commands.keys():
+                await self.commands[command](message, stripped)
                 return True
 
-            else:
-                return False
-
-        else:
-            return False
+        return False
 
 
-    async def help(self, message, stripped, server):
-        await message.channel.send(embed=discord.Embed(description=self.get_strings(server, 'help')))
+    async def help(self, message, stripped):
+        await message.channel.send(embed=discord.Embed(description='HELP'))
 
 
-    async def info(self, message, stripped, server):
-        await message.channel.send(embed=discord.Embed(description=self.get_strings(server, 'info').format(prefix=server.prefix, user=self.user.name)))
+    async def info(self, message, stripped):
+        await message.channel.send(embed=discord.Embed(description='INFO'.format(prefix=server.prefix, user=self.user.name)))
 
 
-    async def autoclear(self, message, stripped, server):
+    async def autoclear(self, message, stripped):
 
         if not message.author.guild_permissions.manage_guild:
-            await message.channel.send(embed=discord.Embed(description=self.get_strings(server, 'admin_required')))
+            await message.channel.send('You must be a Manager to run this command')
             return
 
         seconds = 10
@@ -189,41 +166,19 @@ class BotClient(discord.AutoShardedClient):
             except ValueError:
                 continue
 
-        if len(message.channel_mentions) == 0:
-            if message.channel.id in map(int, server.autoclears.keys()):
-                del server.autoclears[str(message.channel.id)]
-                await message.channel.send(embed=discord.Embed(description=self.get_strings(server, 'autoclear/disable').format(message.channel.mention)))
-            else:
-                server.autoclears[str(message.channel.id)] = seconds
-                await message.channel.send(embed=discord.Embed(description=self.get_strings(server, 'autoclear/enable').format(seconds, message.channel.mention)))
+        a = Autoclears(channel=message.channel.id, time=seconds)
 
-        else:
-            disable_all = True
-            for i in message.channel_mentions:
-                if i.id not in map(int, server.autoclears.keys()):
-                    disable_all = False
-                server.autoclears[str(i.id)] = seconds
-
-
-            if disable_all:
-                for i in message.channel_mentions:
-                    del server.autoclears[str(i.id)]
-
-                await message.channel.send(embed=discord.Embed(description=self.get_strings(server, 'autoclear/disable').format(', '.join(map(lambda x: x.name, message.channel_mentions)))))
-            else:
-                await message.channel.send(embed=discord.Embed(description=self.get_strings(server, 'autoclear/enable').format(seconds)))
-
+        session.add(a)
         session.commit()
 
-
-    async def clear(self, message, stripped, server):
+    async def clear(self, message, stripped):
 
         if not message.author.guild_permissions.manage_messages:
-            await message.channel.send(embed=discord.Embed(description=self.get_strings(server, 'admin_required')))
+            await message.channel.send('Admin is required to perform this command')
             return
 
         if len(message.mentions) == 0:
-            await message.channel.send(embed=discord.Embed(description=self.get_strings(server, 'clear/no_argument')))
+            await message.channel.send('Please mention users you wish to clear')
             return
 
         delete_list = []
@@ -267,7 +222,7 @@ class BotClient(discord.AutoShardedClient):
                 session.query(Deletes).filter(Deletes.map_id.in_(dels)).delete(synchronize_session='fetch')
 
             session.commit()
-            await asyncio.sleep(5)
+            await asyncio.sleep(1)
 
 client = BotClient()
 
