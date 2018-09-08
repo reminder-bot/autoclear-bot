@@ -98,11 +98,13 @@ class BotClient(discord.AutoShardedClient):
         clears = session.query(Autoclears).filter(Autoclears.channel == message.channel.id).order_by(Autoclears.user)
 
         for c in clears:
+            print(c)
             if c.user == message.author.id or c.user is None:
                 d = Deletes(time=time.time() + c.time, channel=message.channel.id, message=message.id)
 
                 session.add(d)
                 session.commit()
+                break
 
         if message.author.bot or message.content is None or message.guild is None:
             return
@@ -166,9 +168,32 @@ class BotClient(discord.AutoShardedClient):
             except ValueError:
                 continue
 
-        a = Autoclears(channel=message.channel.id, time=seconds)
+        if message.mentions != []:
+            for mention in message.mentions:
+                s = session.query(Autoclears).filter_by(channel=message.channel.id, user=mention.id).first()
 
-        session.add(a)
+                if s is None:
+                    print('Creating a new autoclear')
+                    a = Autoclears(channel=message.channel.id, time=seconds, user=mention.id)
+                    sesison.add(a)
+
+                else:
+                    print('Editing existing autoclear from {}s to {}s for {}'.format(s.time, seconds, message.author))
+                    s.time = seconds
+
+        else:
+            s = session.query(Autoclears).filter_by(channel=message.channel.id, user=None).first()
+
+            if s is None:
+                print('Creating a new autoclear')
+                a = Autoclears(channel=message.channel.id, time=seconds)
+
+                session.add(a)
+
+            else:
+                print('Editing existing autoclear from {}s to {}s'.format(s.time, seconds))
+                s.time = seconds
+
         session.commit()
 
     async def clear(self, message, stripped):
