@@ -170,7 +170,7 @@ Welcome to autoclear bot!
 Help page: `autoclear help`
 Prefixes: @ me or `autoclear`
 
-Invite me to your guild: <insert link>
+Invite me to your guild: https://discordapp.com/oauth2/authorize?client_id=488060245739044896&scope=bot&permissions=93184
 
         '''))
 
