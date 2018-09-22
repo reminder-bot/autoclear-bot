@@ -197,7 +197,7 @@ Invite me to your guild: https://discordapp.com/oauth2/authorize?client_id=48806
                 if s is None:
                     print('Creating a new autoclear')
                     a = Autoclears(channel=message.channel.id, time=seconds, user=mention.id)
-                    sesison.add(a)
+                    session.add(a)
 
                 else:
                     print('Editing existing autoclear from {}s to {}s for {}'.format(s.time, seconds, message.author))
