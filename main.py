@@ -190,7 +190,10 @@ Invite me to your guild: https://discordapp.com/oauth2/authorize?client_id=48806
             except ValueError:
                 continue
 
-        if message.mentions != []:
+        if seconds > 31557600:
+            await message.channel.send('Please specify a time less than a year')
+
+        elif message.mentions != []:
             for mention in message.mentions:
                 s = session.query(Autoclears).filter_by(channel=message.channel.id, user=mention.id).first()
 
