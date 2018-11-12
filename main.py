@@ -89,6 +89,11 @@ class BotClient(discord.AutoShardedClient):
         await csession.close()
 
 
+    async def on_error(self, message):
+        session.rollback()
+        raise
+
+
     async def on_message(self, message):
 
         clears = session.query(Autoclears).filter(Autoclears.channel == message.channel.id).order_by(Autoclears.time)
