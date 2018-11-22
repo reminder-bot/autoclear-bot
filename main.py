@@ -89,7 +89,7 @@ class BotClient(discord.AutoShardedClient):
         await csession.close()
 
 
-    async def on_error(self, message):
+    async def on_error(self, e, *a, **k):
         session.rollback()
         raise
 
