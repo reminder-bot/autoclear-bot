@@ -41,6 +41,7 @@ class BotClient(discord.AutoShardedClient):
 
             'start' : self.autoclear,
             'clear' : self.clear,
+            'purge' : self.purge,
             'stop' : self.stop,
             'rules' : self.rules,
         }
@@ -157,6 +158,9 @@ class BotClient(discord.AutoShardedClient):
 
 `autoclear clear` - Delete message history of specific users. Accepts arguments:
 \t* User mention (user to clear history of)
+
+`autoclear purge` - Delete message history. Accepts arguments:
+\t* Limit (number of messages to delete)
 
 `autoclear rules` - Check the autoclear rules for specified channels. Accepts arguments:
 \t* Channel mention (channel to view rules of- defaults to current)
@@ -297,6 +301,19 @@ Invite me to your guild: https://discordapp.com/oauth2/authorize?client_id=48806
         await message.channel.delete_messages(delete_list)
 
 
+    async def purge(self, message, stripped):
+
+        if not message.author.guild_permissions.manage_messages:
+            await message.channel.send('Admin is required to perform this command')
+            return
+
+        if not stripped or not all(x in '0123456789' for x in stripped) or not 0 < int(stripped) <= 100:
+            await message.channel.send('Please specify a limit between 1 and 100')
+            return
+
+        await message.channel.purge(limit=int(stripped))
+
+
     async def deletes(self):
         await self.wait_until_ready()
 
@@ -327,6 +344,7 @@ Invite me to your guild: https://discordapp.com/oauth2/authorize?client_id=48806
 
             session.commit()
             await asyncio.sleep(1)
+
 
 client = BotClient()
 
