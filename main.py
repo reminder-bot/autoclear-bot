@@ -337,7 +337,7 @@ Invite me to your guild: https://discordapp.com/oauth2/authorize?client_id=48806
                             logger.error('Ln 1049: {}'.format(e))
 
             except Exception as e:
-                logger.error('check_reminders: {}'.format(e))
+                logger.error('deletes: {}'.format(e))
 
             if len(dels) > 0:
                 session.query(Deletes).filter(Deletes.map_id.in_(dels)).delete(synchronize_session='fetch')
